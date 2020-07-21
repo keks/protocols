@@ -13,13 +13,13 @@ import "../../lib/SignatureUtil.sol";
 /// @title OwnerChangeTransaction
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @dev There are a few concepts we need to clarify:
-///   - StatelessWallet: it's a stateless contract that can be used to verify permissions for layer-2
+///   - statelessWallet: it's a stateless contract that can be used to verify permissions for layer-2
 ///                      wallet recovery, inheritance, etc. We do not have to define an interface, as
 ///                      the protocol will call a StatelessWallet's static functions based on data provided
 ///                      by the old/new owners.
 ///   - walletDataHash:  a hash of the wallet's data. Neither the data itself or this walletDataHash will
-///                      be stored in the Merkle tree. We suppost the wallet data and this hash are both managed
-///                      on the client side. The definition of wallet's data and the way it's hashed are also
+///                      be stored in the Merkle tree. We suppose the wallet data and this hash are both managed
+///                      on the client side. The definition of wallet's data and the way it is hashed are also
 ///                      controlled by the associated StatelessWallet.
 ///   - walletHash:      a hash calculated from both the walletDataHash and the address of the wallet's
 ///                      associated StatelessWallet. walletHash is the only wallet-related data stored in

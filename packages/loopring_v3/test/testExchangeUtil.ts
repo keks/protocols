@@ -667,7 +667,7 @@ export class ExchangeTestUtil {
 
   public pendingBlocks: Block[][] = [];
 
-  public onchainDataAvailability = true;
+  public rollupMode = true;
   public compressionType = CompressionType.LZ;
 
   public autoCommit = true;
@@ -746,11 +746,7 @@ export class ExchangeTestUtil {
       this.accounts.push([protocolFeeAccount, indexAccount]);
     }
 
-    await this.createExchange(
-      this.testContext.deployer,
-      true,
-      this.onchainDataAvailability
-    );
+    await this.createExchange(this.testContext.deployer, true, this.rollupMode);
 
     const constants = await this.exchange.getConstants();
     this.SNARK_SCALAR_FIELD = new BN(constants.SNARK_SCALAR_FIELD);
@@ -1904,7 +1900,7 @@ export class ExchangeTestUtil {
     const block: any = {};
     block.blockType = blockType;
     block.blockSize = blockSize;
-    block.onchainDataAvailability = this.onchainDataAvailability;
+    block.rollupMode = this.rollupMode;
     fs.writeFileSync(
       blockFilename,
       JSON.stringify(block, undefined, 4),
@@ -1913,7 +1909,7 @@ export class ExchangeTestUtil {
 
     const isCircuitRegistered = await this.blockVerifier.isCircuitRegistered(
       block.blockType,
-      block.onchainDataAvailability,
+      block.rollupMode,
       block.blockSize,
       blockVersion
     );
@@ -1927,7 +1923,7 @@ export class ExchangeTestUtil {
 
       let verificationKeyFilename = "keys/";
       verificationKeyFilename += "all";
-      verificationKeyFilename += block.onchainDataAvailability ? "_DA_" : "_";
+      verificationKeyFilename += block.rollupMode ? "_DA_" : "_";
       verificationKeyFilename += block.blockSize + "_vk.json";
 
       // Read the verification key and set it in the smart contract
@@ -1937,7 +1933,7 @@ export class ExchangeTestUtil {
 
       await this.blockVerifier.registerCircuit(
         block.blockType,
-        block.onchainDataAvailability,
+        block.rollupMode,
         block.blockSize,
         blockVersion,
         vkFlattened
@@ -1953,7 +1949,7 @@ export class ExchangeTestUtil {
     key <<= 8;
     key |= block.blockVersion;
     key <<= 1;
-    key |= this.onchainDataAvailability ? 1 : 0;
+    key |= this.rollupMode ? 1 : 0;
     return key;
   }
 
@@ -2347,7 +2343,7 @@ export class ExchangeTestUtil {
       const operator = await this.getActiveOperator(exchangeID);
       const txBlock: TxBlock = {
         transactions,
-        onchainDataAvailability: this.onchainDataAvailability,
+        rollupMode: this.rollupMode,
         timestamp,
         protocolTakerFeeBips,
         protocolMakerFeeBips,
@@ -2382,7 +2378,7 @@ export class ExchangeTestUtil {
       bs.addNumber(txBlock.protocolMakerFeeBips, 1);
       bs.addNumber(numConditionalTransactions, 4);
       const allDa = new Bitstream();
-      if (block.onchainDataAvailability) {
+      if (block.rollupMode) {
         allDa.addNumber(block.operatorAccountID, 3);
         for (const tx of block.transactions) {
           //console.log(tx);
@@ -2535,7 +2531,7 @@ export class ExchangeTestUtil {
           allDa.addHex(da.getData());
         }
       }
-      if (block.onchainDataAvailability) {
+      if (block.rollupMode) {
         bs.addHex(allDa.getData());
       }
 
@@ -2654,7 +2650,7 @@ export class ExchangeTestUtil {
   public async createExchange(
     owner: string,
     bSetupTestState: boolean = true,
-    onchainDataAvailability: boolean = true
+    rollupMode: boolean = true
   ) {
     const operator = this.testContext.operators[0];
     const exchangeCreationCostLRC = await this.loopringV3.exchangeCreationCostLRC();
@@ -2672,7 +2668,7 @@ export class ExchangeTestUtil {
     // Create the new exchange
     const tx = await this.universalRegistry.forgeExchange(
       forgeMode,
-      onchainDataAvailability,
+      rollupMode,
       Constants.zeroAddress,
       Constants.zeroAddress,
       { from: owner }
@@ -2726,7 +2722,7 @@ export class ExchangeTestUtil {
     this.exchangeOwner = owner;
     this.exchangeOperator = operator;
     this.exchangeId = exchangeId;
-    this.onchainDataAvailability = onchainDataAvailability;
+    this.rollupMode = rollupMode;
     this.activeOperator = undefined;
 
     // Set the operator
@@ -2776,9 +2772,9 @@ export class ExchangeTestUtil {
 
     // Deposit some LRC to stake for the exchange
     const depositer = this.testContext.operators[2];
-    const stakeAmount = onchainDataAvailability
-      ? await this.loopringV3.minExchangeStakeWithDataAvailability()
-      : await this.loopringV3.minExchangeStakeWithoutDataAvailability();
+    const stakeAmount = rollupMode
+      ? await this.loopringV3.minExchangeStakeRollup()
+      : await this.loopringV3.minExchangeStakeValidium();
     await this.setBalanceAndApprove(
       depositer,
       "LRC",
@@ -2979,8 +2975,8 @@ export class ExchangeTestUtil {
       await this.loopringV3.blockVerifierAddress(),
       await this.loopringV3.exchangeCreationCostLRC(),
       this.getRandomFee(),
-      await this.loopringV3.minExchangeStakeWithDataAvailability(),
-      await this.loopringV3.minExchangeStakeWithoutDataAvailability(),
+      await this.loopringV3.minExchangeStakeRollup(),
+      await this.loopringV3.minExchangeStakeValidium(),
       { from: this.testContext.deployer }
     );
   }
