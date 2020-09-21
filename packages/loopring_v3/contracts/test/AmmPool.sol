@@ -277,28 +277,27 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             require(validUntil == 0, "INVALID_VALID_UNTIL");
         }
 
-
-        withdrawFromApprovedWithdrawals();
+        withdrawTokensFromExchange();
 
         // Withdraw
         bool usingSignatureApproval = signature.length > 0;
         address poolToken = address(0);
-        uint poolAmountWithdrawn = unlockToken(poolToken, poolAmount, usingSignatureApproval);
+        uint poolAmountWithdrawn = unlockAndTransferOutToken(poolToken, poolAmount, usingSignatureApproval);
 
         uint[] memory amountsWithdrawn = new uint[](tokens.length);
         for (uint i = 0; i < tokens.length + 1; i++) {
-            amountsWithdrawn[i] = unlockToken(
+            amountsWithdrawn[i] = unlockAndTransferOutToken(
                 tokens[i].addr,
                 amounts[i],
                 usingSignatureApproval
             );
         }
 
-        emit Withdrawal(msg.sender, poolAmount, amountsWithdrawn);
+        emit Withdrawal(msg.sender, poolAmountWithdrawn, amountsWithdrawn);
     }
 
     // Withdraw any outstanding balances for the pool account on the exchange
-    function withdrawFromApprovedWithdrawals()
+    function withdrawTokensFromExchange()
         internal
     {
         address[] memory owners = new address[](tokens.length);
@@ -314,6 +313,8 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     // Needs to be able to receive ETH from the exchange contract
     receive() payable external {}
 
+    // Question: available for?
+    // @dev Returns the balance available for join the liquidity?
     function availableBalance(address token, address owner)
         public
         view
@@ -339,11 +340,10 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         return shutdownTimestamp == 0;
     }
 
-
      function depositAndJoinPool(
-        uint minPoolAmountOut,
+        uint              minPoolAmountOut,
         uint96[] calldata maxAmountsIn,
-        bool fromLayer2
+        bool              fromLayer2
         )
         external
         online
@@ -358,9 +358,9 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     /// @param maxAmountsIn The maximum amounts that can be used to mint
     ///                     the specified amount of liquidity tokens.
     function joinPool(
-        uint minPoolAmountOut,
+        uint              minPoolAmountOut,
         uint96[] calldata maxAmountsIn,
-        bool fromLayer2
+        bool              fromLayer2
         )
         external
         online
@@ -483,7 +483,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
 
             // Withdraw the part owned
             uint amount = poolAmountIn.mul(tokenBalance) / poolTotal;
-            withdrawInternal(token, amount, msg.sender);
+            transferOut(token, amount, msg.sender);
         }
 
         // Burn liquidity tokens
@@ -570,11 +570,11 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         }
 
         address poolToken = address(this);
-        lockToken(poolToken, poolAmount);
+        transferInAndLockToken(poolToken, poolAmount);
 
         // Lock up funds inside this contract so we can depend on them being available.
         for (uint i = 0; i < tokens.length; i++) {
-            lockToken(tokens[i].addr, amounts[i]);
+            transferInAndLockToken(tokens[i].addr, amounts[i]);
         }
 
         // Question: should we add this following line?
@@ -584,9 +584,9 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     }
 
     function joinPoolInternal(
-        uint minPoolAmountOut,
+        uint              minPoolAmountOut,
         uint96[] calldata maxAmountsIn,
-        bool fromLayer2
+        bool              fromLayer2
         )
         internal
     {
@@ -601,7 +601,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             fromLayer2: fromLayer2,
             minPoolAmountOut: minPoolAmountOut,
             maxAmountsIn: maxAmountsIn,
-            storageIDs: new uint32[](0)
+            storageIDs: new uint32[](0) // why this?
         });
         bytes32 txHash = hashPoolJoin(DOMAIN_SEPARATOR, join);
         approvedTx[txHash] = 0xffffffff;
@@ -922,36 +922,18 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         totalLockedBalance[token.addr] = totalLockedBalance[token.addr].add(amount);
     }
 
-    function withdrawInternal(
-        address token,
-        uint    amount,
-        address to
-        )
-        internal
-    {
-        if (token == address(0)) {
-            to.sendETHAndVerify(amount, gasleft());
-        } else {
-            token.safeTransferAndVerify(to, amount);
-        }
-    }
-
-    function lockToken(address token, uint amount)
+    function transferInAndLockToken(address token, uint amount)
         private
     {
         if (amount == 0) {
             return;
         }
-        if (token == address(0)) {
-            require(msg.value == amount, "INVALID_ETH_DEPOSIT");
-        } else {
-            token.safeTransferFromAndVerify(msg.sender, address(this), uint(amount));
-        }
+        transferIn(token, uint(amount), msg.sender);
         lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
         totalLockedBalance[token] = totalLockedBalance[token].add(amount);
     }
 
-    function unlockToken(address token, uint amount, bool usingSignatureApproval)
+    function unlockAndTransferOutToken(address token, uint amount, bool usingSignatureApproval)
         private
         returns (uint withdrawn)
     {
@@ -962,7 +944,27 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         withdrawn = amount > available ? available : amount;
         if (withdrawn > 0) {
             lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].sub(withdrawn);
-            withdrawInternal(token, withdrawn, msg.sender);
+            transferOut(token, withdrawn, msg.sender);
+        }
+    }
+
+    function transferIn(address token, uint amount, address from)
+        private
+    {
+        if (token == address(0)) {
+            require(msg.value == amount, "INVALID_ETH_DEPOSIT");
+        } else {
+            token.safeTransferFromAndVerify(from, address(this), amount);
+        }
+    }
+
+    function transferOut(address token, uint amount, address to)
+        private
+    {
+        if (token == address(0)) {
+            to.sendETHAndVerify(amount, gasleft());
+        } else {
+            token.safeTransferAndVerify(to, amount);
         }
     }
 
