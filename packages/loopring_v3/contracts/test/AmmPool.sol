@@ -397,7 +397,8 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     }
 
     function setLockedUntil(uint timestamp)
-        public
+        external
+        nonReentrant
     {
         if (timestamp > 0) {
             require(timestamp > lockedUntil[msg.sender], "CANNOT_UNLOCK_EARLIER");
@@ -561,6 +562,13 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             require(poolAmount == 0, "CANNOT_DEPOSIT_LIQUIDITY_TOKENS_WHILE_EXITING");
         }
 
+        if (poolAmount > 0) {
+            address poolToken = address(this);
+            poolToken.safeTransferFromAndVerify(msg.sender, address(this), uint(poolAmount));
+            lockedBalance[poolToken][msg.sender] = lockedBalance[poolToken][msg.sender].add(poolAmount);
+            totalLockedBalance[poolToken] = totalLockedBalance[poolToken].add(poolAmount);
+        }
+
         // Lock up funds inside this contract so we can depend on them being available.
         for (uint i = 0; i < tokens.length; i++) {
             (address token, uint amount) = (tokens[i].addr, amounts[i]);
@@ -571,14 +579,11 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             }
             lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
             totalLockedBalance[token] = totalLockedBalance[token].add(amount);
+
         }
 
-        if (poolAmount > 0) {
-            address poolToken = address(this);
-            poolToken.safeTransferFromAndVerify(msg.sender, address(this), uint(poolAmount));
-            lockedBalance[poolToken][msg.sender] = lockedBalance[poolToken][msg.sender].add(poolAmount);
-            totalLockedBalance[poolToken] = totalLockedBalance[poolToken].add(poolAmount);
-        }
+        // Question: should we add this following line?
+        lockedUntil[msg.sender] = 0;
 
         emit Deposit(msg.sender, poolAmount, amounts);
     }
