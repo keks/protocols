@@ -562,30 +562,33 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             require(poolAmount == 0, "CANNOT_DEPOSIT_LIQUIDITY_TOKENS_WHILE_EXITING");
         }
 
-        if (poolAmount > 0) {
-            address poolToken = address(this);
-            poolToken.safeTransferFromAndVerify(msg.sender, address(this), uint(poolAmount));
-            lockedBalance[poolToken][msg.sender] = lockedBalance[poolToken][msg.sender].add(poolAmount);
-            totalLockedBalance[poolToken] = totalLockedBalance[poolToken].add(poolAmount);
-        }
+        address poolToken = address(this);
+        lockToken(poolToken, poolAmount);
 
         // Lock up funds inside this contract so we can depend on them being available.
         for (uint i = 0; i < tokens.length; i++) {
-            (address token, uint amount) = (tokens[i].addr, amounts[i]);
-            if (token == address(0)) {
-                require(msg.value == amount, "INVALID_ETH_DEPOSIT");
-            } else {
-                token.safeTransferFromAndVerify(msg.sender, address(this), uint(amount));
-            }
-            lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
-            totalLockedBalance[token] = totalLockedBalance[token].add(amount);
-
+            lockToken(tokens[i].addr, amounts[i]);
         }
 
         // Question: should we add this following line?
         lockedUntil[msg.sender] = 0;
 
         emit Deposit(msg.sender, poolAmount, amounts);
+    }
+
+    function lockToken(address token, uint amount)
+        private
+    {
+        if (amount == 0) {
+            return;
+        }
+        if (token == address(0)) {
+            require(msg.value == amount, "INVALID_ETH_DEPOSIT");
+        } else {
+            token.safeTransferFromAndVerify(msg.sender, address(this), uint(amount));
+        }
+        lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
+        totalLockedBalance[token] = totalLockedBalance[token].add(amount);
     }
 
     function joinPoolInternal(
