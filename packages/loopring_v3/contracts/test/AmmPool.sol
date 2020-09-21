@@ -58,6 +58,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
 
     event Withdrawal(
         address  owner,
+        uint     poolAmount,
         uint[]   amounts
     );
 
@@ -226,7 +227,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     /// @param poolAmount The amount of liquidity tokens to deposit
     /// @param amounts The amounts to deposit
     function deposit(
-        uint96 poolAmount,
+        uint96            poolAmount,
         uint96[] calldata amounts
         )
         external
@@ -242,9 +243,9 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     /// @param validUntil When a signature is provided: the `validUntil` of the signature.
     /// @param signature Signature of the operator to allow withdrawals without unlocking
     function withdraw(
-        uint   poolAmount,
+        uint            poolAmount,
         uint[] calldata amounts,
-        uint   validUntil,
+        uint            validUntil,
         bytes  calldata signature
         )
         external
@@ -268,10 +269,38 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
                     )
                 )
             );
-            require(withdrawHash.verifySignature(exchange.owner(), signature), "INVALID_SIGNATURE");
+            require(
+                withdrawHash.verifySignature(exchange.owner(), signature),
+                "INVALID_SIGNATURE"
+            );
+        } else {
+            require(validUntil == 0, "INVALID_VALID_UNTIL");
         }
 
-        // Withdraw any outstanding balances for the pool account on the exchange
+
+        withdrawFromApprovedWithdrawals();
+
+        // Withdraw
+        bool usingSignatureApproval = signature.length > 0;
+        address poolToken = address(0);
+        uint poolAmountWithdrawn = unlockToken(poolToken, poolAmount, usingSignatureApproval);
+
+        uint[] memory amountsWithdrawn = new uint[](tokens.length);
+        for (uint i = 0; i < tokens.length + 1; i++) {
+            amountsWithdrawn[i] = unlockToken(
+                tokens[i].addr,
+                amounts[i],
+                usingSignatureApproval
+            );
+        }
+
+        emit Withdrawal(msg.sender, poolAmount, amountsWithdrawn);
+    }
+
+    // Withdraw any outstanding balances for the pool account on the exchange
+    function withdrawFromApprovedWithdrawals()
+        internal
+    {
         address[] memory owners = new address[](tokens.length);
         address[] memory tokenAddresses = new address[](tokens.length);
 
@@ -280,28 +309,6 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             tokenAddresses[i] = tokens[i].addr;
         }
         exchange.withdrawFromApprovedWithdrawals(owners, tokenAddresses);
-
-        // Withdraw
-        uint[] memory withdrawn = new uint[](tokens.length + 1);
-        for (uint i = 0; i < tokens.length + 1; i++) {
-            uint amount = (i < tokens.length) ? amounts[i] : poolAmount;
-            address token = (i < tokens.length) ? tokens[i].addr : address(this);
-            uint available = (signature.length > 0) ?
-                lockedBalance[token][msg.sender] :
-                availableBalance(token, msg.sender);
-
-            if (amount > available) {
-                withdrawn[i] = available;
-            } else {
-                withdrawn[i] = amount;
-            }
-            if (withdrawn[i] > 0) {
-                lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].sub(withdrawn[i]);
-                withdrawInternal(token, withdrawn[i], msg.sender);
-            }
-        }
-
-        emit Withdrawal(msg.sender, withdrawn);
     }
 
     // Needs to be able to receive ETH from the exchange contract
@@ -574,21 +581,6 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         lockedUntil[msg.sender] = 0;
 
         emit Deposit(msg.sender, poolAmount, amounts);
-    }
-
-    function lockToken(address token, uint amount)
-        private
-    {
-        if (amount == 0) {
-            return;
-        }
-        if (token == address(0)) {
-            require(msg.value == amount, "INVALID_ETH_DEPOSIT");
-        } else {
-            token.safeTransferFromAndVerify(msg.sender, address(this), uint(amount));
-        }
-        lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
-        totalLockedBalance[token] = totalLockedBalance[token].add(amount);
     }
 
     function joinPoolInternal(
@@ -941,6 +933,36 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             to.sendETHAndVerify(amount, gasleft());
         } else {
             token.safeTransferAndVerify(to, amount);
+        }
+    }
+
+    function lockToken(address token, uint amount)
+        private
+    {
+        if (amount == 0) {
+            return;
+        }
+        if (token == address(0)) {
+            require(msg.value == amount, "INVALID_ETH_DEPOSIT");
+        } else {
+            token.safeTransferFromAndVerify(msg.sender, address(this), uint(amount));
+        }
+        lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].add(amount);
+        totalLockedBalance[token] = totalLockedBalance[token].add(amount);
+    }
+
+    function unlockToken(address token, uint amount, bool usingSignatureApproval)
+        private
+        returns (uint withdrawn)
+    {
+        uint available = usingSignatureApproval ?
+            lockedBalance[token][msg.sender] :
+            availableBalance(token, msg.sender);
+
+        withdrawn = amount > available ? available : amount;
+        if (withdrawn > 0) {
+            lockedBalance[token][msg.sender] = lockedBalance[token][msg.sender].sub(withdrawn);
+            withdrawInternal(token, withdrawn, msg.sender);
         }
     }
 
