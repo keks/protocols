@@ -52,12 +52,13 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
 
     event Deposit(
         address  owner,
+        uint     poolAmount,
         uint96[] amounts
     );
 
     event Withdrawal(
         address  owner,
-        uint256[] amounts
+        uint[]   amounts
     );
 
     event JoinPoolRequested(
@@ -158,7 +159,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     // A map from an owner to a token to the balance
     mapping (address => mapping (address => uint)) lockedBalance;
     // A map from an owner to the timestamp until all funds of the user are locked
-    // A zero value == locked indefinitely.
+    // (A zero value == locked indefinitely)
     mapping (address => uint) lockedUntil;
     // A map from a token to the total balance owned directly by LPs (so NOT owned by the pool itself)
     mapping (address => uint) totalLockedBalance;
@@ -548,7 +549,7 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
     }
 
     function depositInternal(
-        uint poolAmount,
+        uint              poolAmount,
         uint96[] calldata amounts
         )
         internal
@@ -561,9 +562,8 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
         }
 
         // Lock up funds inside this contract so we can depend on them being available.
-        for (uint i = 0; i < tokens.length + 1; i++) {
-            uint amount = (i < tokens.length) ? amounts[i] : poolAmount;
-            address token = (i < tokens.length) ? tokens[i].addr : address(this);
+        for (uint i = 0; i < tokens.length; i++) {
+            (address token, uint amount) = (tokens[i].addr, amounts[i]);
             if (token == address(0)) {
                 require(msg.value == amount, "INVALID_ETH_DEPOSIT");
             } else {
@@ -573,7 +573,14 @@ contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
             totalLockedBalance[token] = totalLockedBalance[token].add(amount);
         }
 
-        emit Deposit(msg.sender, amounts);
+        if (poolAmount > 0) {
+            address poolToken = address(this);
+            poolToken.safeTransferFromAndVerify(msg.sender, address(this), uint(poolAmount));
+            lockedBalance[poolToken][msg.sender] = lockedBalance[poolToken][msg.sender].add(poolAmount);
+            totalLockedBalance[poolToken] = totalLockedBalance[poolToken].add(poolAmount);
+        }
+
+        emit Deposit(msg.sender, poolAmount, amounts);
     }
 
     function joinPoolInternal(
