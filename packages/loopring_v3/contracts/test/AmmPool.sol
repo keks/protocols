@@ -15,6 +15,7 @@ import "../lib/ERC20.sol";
 import "../lib/ERC20SafeTransfer.sol";
 import "../lib/MathUint.sol";
 import "../lib/MathUint96.sol";
+import "../lib/ReentrancyGuard.sol";
 import "../lib/SignatureUtil.sol";
 
 import "../core/impl/libtransactions/AmmUpdateTransaction.sol";
@@ -24,7 +25,7 @@ import "../core/impl/libtransactions/WithdrawTransaction.sol";
 /// @title AmmPool
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @dev Incomplete AMM pool implementation for demo/testing purposes.
-contract AmmPool is LPERC20, IBlockReceiver, IAgent {
+contract AmmPool is ReentrancyGuard, LPERC20, IBlockReceiver, IAgent {
 
     using AddressUtil       for address;
     using AddressUtil       for address payable;
@@ -80,9 +81,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
 
     uint public constant BASE = 10 ** 18;
     uint public constant INITIAL_SUPPLY = 100 * BASE;
-
     uint public constant MAX_AGE_REQUEST_UNTIL_POOL_SHUTDOWN = 7 days;
-
     uint public constant MIN_TIME_TO_UNLOCK = 1 days;
 
     IExchangeV3 public exchange;
@@ -196,6 +195,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         uint8              _feeBips
         )
         external
+        nonReentrant
     {
         require(tokens.length == 0, "ALREADY_INITIALIZED");
         require(_tokens.length == _weights.length, "INVALID_DATA");
@@ -224,10 +224,14 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
 
     /// @param poolAmount The amount of liquidity tokens to deposit
     /// @param amounts The amounts to deposit
-    function deposit(uint96 poolAmount, uint96[] calldata amounts)
+    function deposit(
+        uint96 poolAmount,
+        uint96[] calldata amounts
+        )
         external
         payable
         online
+        nonReentrant
     {
         depositInternal(poolAmount, amounts);
     }
@@ -243,6 +247,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         bytes  calldata signature
         )
         external
+        nonReentrant
     {
         require(amounts.length == tokens.length, "INVALID_DATA");
 
@@ -280,7 +285,10 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         for (uint i = 0; i < tokens.length + 1; i++) {
             uint amount = (i < tokens.length) ? amounts[i] : poolAmount;
             address token = (i < tokens.length) ? tokens[i].addr : address(this);
-            uint available = (signature.length > 0) ? lockedBalance[token][msg.sender] : availableBalance(token, msg.sender);
+            uint available = (signature.length > 0) ?
+                lockedBalance[token][msg.sender] :
+                availableBalance(token, msg.sender);
+
             if (amount > available) {
                 withdrawn[i] = available;
             } else {
@@ -324,9 +332,14 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     }
 
 
-     function depositAndJoinPool(uint minPoolAmountOut, uint96[] calldata maxAmountsIn, bool fromLayer2)
+     function depositAndJoinPool(
+        uint minPoolAmountOut,
+        uint96[] calldata maxAmountsIn,
+        bool fromLayer2
+        )
         external
         online
+        nonReentrant
     {
         depositInternal(0, maxAmountsIn);
         joinPoolInternal(minPoolAmountOut, maxAmountsIn, fromLayer2);
@@ -336,9 +349,14 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     /// @param minPoolAmountOut The minimum number of liquidity tokens that need to be minted for this join.
     /// @param maxAmountsIn The maximum amounts that can be used to mint
     ///                     the specified amount of liquidity tokens.
-    function joinPool(uint minPoolAmountOut, uint96[] calldata maxAmountsIn, bool fromLayer2)
+    function joinPool(
+        uint minPoolAmountOut,
+        uint96[] calldata maxAmountsIn,
+        bool fromLayer2
+        )
         external
         online
+        nonReentrant
     {
         joinPoolInternal(minPoolAmountOut, maxAmountsIn, fromLayer2);
     }
@@ -347,9 +365,14 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     /// @param poolAmountIn The number of liquidity tokens that will be burned.
     /// @param minAmountsOut The minimum amounts that need to be withdrawn when burning
     ///                      the specified amount of liquidity tokens.
-    function exitPool(uint poolAmountIn, uint96[] calldata minAmountsOut, bool toLayer2)
+    function exitPool(
+        uint poolAmountIn,
+        uint96[] calldata minAmountsOut,
+        bool toLayer2
+        )
         external
         online
+        nonReentrant
     {
         require(minAmountsOut.length == tokens.length, "INVALID_DATA");
 
@@ -389,6 +412,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         external
         payable
         online
+        nonReentrant
     {
         /*require(
             block.timestamp > approvedTx[txHash] + MAX_AGE_REQUEST_UNTIL_POOL_SHUTDOWN,
@@ -413,6 +437,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     function withdrawFromPoolWhenShutdown(uint poolAmountIn)
         external
         offline
+        nonReentrant
     {
         // Currently commented out to make the contract size smaller...
         /*bool ready = true;
@@ -522,7 +547,10 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         return ctx.numTransactionsConsumed;
     }
 
-    function depositInternal(uint poolAmount, uint96[] calldata amounts)
+    function depositInternal(
+        uint poolAmount,
+        uint96[] calldata amounts
+        )
         internal
     {
         require(amounts.length == tokens.length, "INVALID_DATA");
@@ -548,7 +576,11 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
         emit Deposit(msg.sender, amounts);
     }
 
-    function joinPoolInternal(uint minPoolAmountOut, uint96[] calldata maxAmountsIn, bool fromLayer2)
+    function joinPoolInternal(
+        uint minPoolAmountOut,
+        uint96[] calldata maxAmountsIn,
+        bool fromLayer2
+        )
         internal
     {
         require(maxAmountsIn.length == tokens.length, "INVALID_DATA");
@@ -798,8 +830,8 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     }
 
     function authenticatePoolTx(
-        address owner,
-        bytes32 poolTxHash,
+        address        owner,
+        bytes32        poolTxHash,
         bytes   memory signature
         )
         internal
@@ -815,7 +847,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     function processDeposit(
         Context memory ctx,
         Token   memory token,
-        uint96  amount
+        uint96         amount
         )
         internal
     {
@@ -853,7 +885,7 @@ contract AmmPool is LPERC20, IBlockReceiver, IAgent {
     function processWithdrawal(
         Context memory ctx,
         Token   memory token,
-        uint    amount
+        uint           amount
         )
         internal
     {
