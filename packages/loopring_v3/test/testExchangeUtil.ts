@@ -143,6 +143,22 @@ export interface OnchainBlock {
   offchainData?: any;
 }
 
+export interface PrintBlock {
+  blockType: number;
+  blockSize: number;
+  blockVersion: number;
+  data: any;
+  proof: any;
+  storeBlockInfoOnchain: boolean;
+  auxiliaryData?: any;
+  offchainData?: any;
+}
+
+export interface CommitData {
+  blocks: PrintBlock[];
+  txData: any;
+}
+
 export interface BlockCallback {
   target: string;
   blockIdx: number;
@@ -1803,6 +1819,7 @@ export class ExchangeTestUtil {
 
     // Prepare block data
     const onchainBlocks: OnchainBlock[] = [];
+    const printBlocks: PrintBlock[] = [];
     for (const [i, block] of blocks.entries()) {
       //console.log(block.blockIdx);
       const onchainBlock: OnchainBlock = {
@@ -1815,8 +1832,45 @@ export class ExchangeTestUtil {
         offchainData: web3.utils.hexToBytes(block.offchainData),
         auxiliaryData: block.auxiliaryData
       };
+      console.log("block i = " + i);
+      console.log("blockType: " + onchainBlock.blockType);
+      console.log("blockSize: " + onchainBlock.blockSize);
+      console.log("blockVersion: " + onchainBlock.blockVersion);
+      console.log("data: " + block.data);
+      console.log("proof: " + onchainBlock.proof);
+      console.log("storeBlockInfoOnchain: " + onchainBlock.storeBlockInfoOnchain);
+      console.log("offchainData: " + block.offchainData); 
+      for (const [j, auxiliaryData] of onchainBlock.auxiliaryData.entries()) {
+        console.log("auxiliaryData j = " + j);
+        // console.log("auxiliaryData = " + auxiliaryData);
+      }                       
       onchainBlocks.push(onchainBlock);
+
+      const printBlock: PrintBlock = {
+        blockType: onchainBlock.blockType,
+        blockSize: onchainBlock.blockSize,
+        blockVersion: onchainBlock.blockVersion,
+        data: block.data,
+        proof: onchainBlock.proof,
+        storeBlockInfoOnchain: onchainBlock.storeBlockInfoOnchain,
+        offchainData: block.offchainData
+      }
+      printBlocks.push(printBlock);
     }
+    const cdata = this.exchange.contract.methods
+      .submitBlocks(onchainBlocks)
+      .encodeABI();
+    console.log("cdata = " + cdata);
+    const commitData: CommitData = {
+      blocks: printBlocks,
+      txData: cdata
+    }
+    const basicFileName = "./blocks/block_" + this.exchangeId + "_basic.json";
+    fs.writeFileSync(
+      basicFileName,
+        JSON.stringify(commitData, undefined, 4),
+        "utf8"
+      );
 
     // Callback that allows modifying the blocks
     if (testCallback !== undefined) {
@@ -2080,6 +2134,7 @@ export class ExchangeTestUtil {
 
       // Create the auxiliary data
       const auxiliaryData: any[] = [];
+      const auxiliaryHexData: any[] = [];
       let numConditionalTransactions = 0;
       for (const [i, transaction] of transactions.entries()) {
         if (transaction.txType === "Transfer") {
@@ -2087,11 +2142,17 @@ export class ExchangeTestUtil {
             numConditionalTransactions++;
             const encodedTransferData = this.getTransferAuxData(transaction);
             auxiliaryData.push([i, web3.utils.hexToBytes(encodedTransferData)]);
+            console.log("txIndex = " + i);
+            console.log("Transfer encodedTransferData = " + encodedTransferData);
+            auxiliaryHexData.push([i, encodedTransferData]); 
           }
         } else if (transaction.txType === "Withdraw") {
           numConditionalTransactions++;
           const encodedWithdrawalData = this.getWithdrawalAuxData(transaction);
           auxiliaryData.push([i, web3.utils.hexToBytes(encodedWithdrawalData)]);
+          console.log("txIndex = " + i);
+          console.log("Withdraw encodedTransferData = " + encodedWithdrawalData);
+          auxiliaryHexData.push([i, encodedWithdrawalData]); 
         } else if (transaction.txType === "Deposit") {
           numConditionalTransactions++;
           auxiliaryData.push([i, web3.utils.hexToBytes("0x")]);
@@ -2105,17 +2166,29 @@ export class ExchangeTestUtil {
               i,
               web3.utils.hexToBytes(encodedAccountUpdateData)
             ]);
+            console.log("txIndex = " + i);
+            console.log("AccountUpdate encodedTransferData = " + encodedAccountUpdateData); 
+            auxiliaryHexData.push([i, encodedAccountUpdateData]); 
           }
         } else if (transaction.txType === "AmmUpdate") {
           numConditionalTransactions++;
           const encodedAmmUpdateData = this.getAmmUpdateAuxData(transaction);
           auxiliaryData.push([i, web3.utils.hexToBytes(encodedAmmUpdateData)]);
+          console.log("txIndex = " + i);
+          console.log("AccountUpdate encodedAmmUpdateData = " + encodedAmmUpdateData); 
+          auxiliaryHexData.push([i, encodedAmmUpdateData]); 
         }
       }
       logDebug("numConditionalTransactions: " + numConditionalTransactions);
 
       const currentBlockIdx = this.blocks[exchangeID].length - 1;
-
+      const auxiliaryDataFileNameId = currentBlockIdx + 1;
+      const auxiliaryDataFileName = "./blocks/block_" + exchangeID + "_" + auxiliaryDataFileNameId + "_auxiliaryData.json";
+      fs.writeFileSync(
+        auxiliaryDataFileName,
+        JSON.stringify(auxiliaryHexData, undefined, 4),
+        "utf8"
+      );
       const protocolFees = await this.exchange.getProtocolFeeValues();
       const protocolTakerFeeBips = protocolFees.takerFeeBips.toNumber();
       const protocolMakerFeeBips = protocolFees.makerFeeBips.toNumber();
