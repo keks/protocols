@@ -625,7 +625,7 @@ contract("LoopringAmmPool", (accounts: string[]) => {
             token,
             new BN(
               web3.utils.toWei(
-                token === "ETH" ? "10000.123456" : "20000.654321",
+                token === "ETH" ? "100.123456" : "20000.654321",
                 "ether"
               )
             )
