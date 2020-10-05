@@ -557,7 +557,7 @@ export class AmmPool {
   }
 }
 
-contract.only("LoopringAmmPool", (accounts: string[]) => {
+contract("LoopringAmmPool", (accounts: string[]) => {
   let ctx: ExchangeTestUtil;
 
   let sharedConfig: any;
@@ -603,7 +603,7 @@ contract.only("LoopringAmmPool", (accounts: string[]) => {
   describe("AMM", function() {
     this.timeout(0);
 
-    it("Successful swap (AMM maker)", async () => {
+    it.only("Successful swap (AMM maker)", async () => {
       const ownerA = ctx.testContext.orderOwners[10];
       const ownerB = ctx.testContext.orderOwners[11];
 
@@ -637,107 +637,117 @@ contract.only("LoopringAmmPool", (accounts: string[]) => {
         from: registryOwner
       });
 
-      await pool.prePoolTransactions();
-      await pool.join(
-        ownerA,
-        pool.POOL_TOKEN_BASE,
-        [
-          new BN(web3.utils.toWei("10000.123456", "ether")),
-          new BN(web3.utils.toWei("20000.654321", "ether"))
-        ],
-        [new BN(0), new BN(0)],
-        { authMethod: AuthMethod.ECDSA }
-      );
-      await pool.join(
-        ownerB,
-        pool.POOL_TOKEN_BASE,
-        [
-          new BN(web3.utils.toWei("10000.123456", "ether")),
-          new BN(web3.utils.toWei("20000.654321", "ether"))
-        ],
-        [new BN(0), new BN(0)],
-        { authMethod: AuthMethod.ECDSA }
-      );
-      await ctx.submitTransactions(16);
+      const exchangeAddress = ctx.exchange.address;
+      const ownerContract = await ctx.exchange.owner();
 
-      const ring: SpotTrade = {
-        orderA: {
-          owner: pool.contract.address,
-          tokenS: "WETH",
-          tokenB: "GTO",
-          amountS: new BN(web3.utils.toWei("98", "ether")),
-          amountB: new BN(web3.utils.toWei("200", "ether")),
-          feeBips: 0,
-          amm: true
-        },
-        orderB: {
-          tokenS: "GTO",
-          tokenB: "WETH",
-          amountS: new BN(web3.utils.toWei("200", "ether")),
-          amountB: new BN(web3.utils.toWei("98", "ether"))
-        },
-        expected: {
-          orderA: { filledFraction: 1.0, spread: new BN(0) },
-          orderB: { filledFraction: 1.0 }
-        }
-      };
-      await ctx.setupRing(ring, true, true, false, true);
+      console.log("Exchange address:", exchangeAddress);
+      console.log("exchangeId:", ctx.exchangeId);
+      console.log("LoopringAmmPool:", pool.contract.address);
+      console.log("ownerContract:", ownerContract);
+      console.log("agentRegistry:", agentRegistry.address);
+      console.log("registryOwner:", registryOwner);
 
-      await ctx.deposit(
-        ctx.exchangeOperator,
-        ctx.exchangeOperator,
-        ring.orderA.tokenB,
-        ring.orderA.amountB
-      );
+      // await pool.prePoolTransactions();
+      // await pool.join(
+      //   ownerA,
+      //   pool.POOL_TOKEN_BASE,
+      //   [
+      //     new BN(web3.utils.toWei("10000.123456", "ether")),
+      //     new BN(web3.utils.toWei("20000.654321", "ether"))
+      //   ],
+      //   [new BN(0), new BN(0)],
+      //   { authMethod: AuthMethod.ECDSA }
+      // );
+      // await pool.join(
+      //   ownerB,
+      //   pool.POOL_TOKEN_BASE,
+      //   [
+      //     new BN(web3.utils.toWei("10000.123456", "ether")),
+      //     new BN(web3.utils.toWei("20000.654321", "ether"))
+      //   ],
+      //   [new BN(0), new BN(0)],
+      //   { authMethod: AuthMethod.ECDSA }
+      // );
+      // await ctx.submitTransactions(16);
 
-      await ctx.sendRing(ring);
+      // const ring: SpotTrade = {
+      //   orderA: {
+      //     owner: pool.contract.address,
+      //     tokenS: "WETH",
+      //     tokenB: "GTO",
+      //     amountS: new BN(web3.utils.toWei("98", "ether")),
+      //     amountB: new BN(web3.utils.toWei("200", "ether")),
+      //     feeBips: 0,
+      //     amm: true
+      //   },
+      //   orderB: {
+      //     tokenS: "GTO",
+      //     tokenB: "WETH",
+      //     amountS: new BN(web3.utils.toWei("200", "ether")),
+      //     amountB: new BN(web3.utils.toWei("98", "ether"))
+      //   },
+      //   expected: {
+      //     orderA: { filledFraction: 1.0, spread: new BN(0) },
+      //     orderB: { filledFraction: 1.0 }
+      //   }
+      // };
+      // await ctx.setupRing(ring, true, true, false, true);
 
-      await pool.prePoolTransactions();
-      await pool.exit(
-        ownerA,
-        pool.POOL_TOKEN_BASE.mul(new BN(6)).div(new BN(10)),
-        [
-          new BN(web3.utils.toWei("5000", "ether")),
-          new BN(web3.utils.toWei("10000", "ether"))
-        ],
-        { authMethod: AuthMethod.ECDSA }
-      );
-      await pool.exit(
-        ownerB,
-        pool.POOL_TOKEN_BASE.mul(new BN(6)).div(new BN(10)),
-        [
-          new BN(web3.utils.toWei("5000", "ether")),
-          new BN(web3.utils.toWei("10000", "ether"))
-        ],
-        { authMethod: AuthMethod.ECDSA }
-      );
-      await ctx.submitTransactions(16);
-      await ctx.submitPendingBlocks();
+      // await ctx.deposit(
+      //   ctx.exchangeOperator,
+      //   ctx.exchangeOperator,
+      //   ring.orderA.tokenB,
+      //   ring.orderA.amountB
+      // );
 
-      // Withdraw some liquidity tokens
-      await ctx.requestWithdrawal(
-        ownerA,
-        pool.contract.address,
-        pool.POOL_TOKEN_BASE.div(new BN(10)),
-        "ETH",
-        new BN(0)
-      );
-      await ctx.submitTransactions();
-      await ctx.submitPendingBlocks();
+      // await ctx.sendRing(ring);
 
-      // Force exit
-      await pool.prePoolTransactions();
-      await pool.exit(
-        ownerA,
-        pool.POOL_TOKEN_BASE.div(new BN(10)),
-        [
-          new BN(web3.utils.toWei("100", "ether")),
-          new BN(web3.utils.toWei("100", "ether"))
-        ],
-        { authMethod: AuthMethod.FORCE }
-      );
-      await ctx.submitTransactions();
-      await ctx.submitPendingBlocks();
+      // await pool.prePoolTransactions();
+      // await pool.exit(
+      //   ownerA,
+      //   pool.POOL_TOKEN_BASE.mul(new BN(6)).div(new BN(10)),
+      //   [
+      //     new BN(web3.utils.toWei("5000", "ether")),
+      //     new BN(web3.utils.toWei("10000", "ether"))
+      //   ],
+      //   { authMethod: AuthMethod.ECDSA }
+      // );
+      // await pool.exit(
+      //   ownerB,
+      //   pool.POOL_TOKEN_BASE.mul(new BN(6)).div(new BN(10)),
+      //   [
+      //     new BN(web3.utils.toWei("5000", "ether")),
+      //     new BN(web3.utils.toWei("10000", "ether"))
+      //   ],
+      //   { authMethod: AuthMethod.ECDSA }
+      // );
+      // await ctx.submitTransactions(16);
+      // await ctx.submitPendingBlocks();
+
+      // // Withdraw some liquidity tokens
+      // await ctx.requestWithdrawal(
+      //   ownerA,
+      //   pool.contract.address,
+      //   pool.POOL_TOKEN_BASE.div(new BN(10)),
+      //   "ETH",
+      //   new BN(0)
+      // );
+      // await ctx.submitTransactions();
+      // await ctx.submitPendingBlocks();
+
+      // // Force exit
+      // await pool.prePoolTransactions();
+      // await pool.exit(
+      //   ownerA,
+      //   pool.POOL_TOKEN_BASE.div(new BN(10)),
+      //   [
+      //     new BN(web3.utils.toWei("100", "ether")),
+      //     new BN(web3.utils.toWei("100", "ether"))
+      //   ],
+      //   { authMethod: AuthMethod.FORCE }
+      // );
+      // await ctx.submitTransactions();
+      // await ctx.submitPendingBlocks();
     });
   });
 });
