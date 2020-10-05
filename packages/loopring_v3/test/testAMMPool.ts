@@ -217,13 +217,16 @@ export class AmmPool {
     const poolConfig = {
       sharedConfig: sharedConfig.address,
       exchange: this.ctx.exchange.address,
-      poolName: "AMM Pool",
+      poolName: "AMM Pool LRC-ETH",
       accountID: deposit.accountID,
       tokens: tokenAddresses,
       weights: strWeights,
       feeBips,
-      tokenSymbol: "LP-LRC"
+      tokenSymbol: "LP-LRC-ETH"
     };
+
+    console.log("poolConfig", poolConfig);
+
     await this.contract.setupPool(poolConfig);
 
     // Handle deposit of liquidity tokens done by setup
@@ -608,7 +611,7 @@ contract("LoopringAmmPool", (accounts: string[]) => {
       const ownerB = ctx.testContext.orderOwners[11];
 
       const feeBipsAMM = 30;
-      const tokens = ["WETH", "GTO"];
+      const tokens = ["LRC", "ETH"];
       const weights = [
         new BN(web3.utils.toWei("1", "ether")),
         new BN(web3.utils.toWei("1", "ether"))
@@ -622,7 +625,7 @@ contract("LoopringAmmPool", (accounts: string[]) => {
             token,
             new BN(
               web3.utils.toWei(
-                token === "WETH" ? "10000.123456" : "20000.654321",
+                token === "ETH" ? "10000.123456" : "20000.654321",
                 "ether"
               )
             )
