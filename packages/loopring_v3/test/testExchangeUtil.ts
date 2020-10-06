@@ -144,6 +144,22 @@ export interface OnchainBlock {
   offchainData?: any;
 }
 
+export interface PrintBlock {
+  blockType: number;
+  blockSize: number;
+  blockVersion: number;
+  data: any;
+  proof: any;
+  storeBlockInfoOnchain: boolean;
+  auxiliaryData?: any;
+  offchainData?: any;
+}
+
+export interface CommitData {
+  blocks: PrintBlock[];
+  txData: any;
+}
+
 export interface AuxiliaryData {
   txIndex: number;
   txAuxiliaryData?: any;
@@ -1285,16 +1301,12 @@ export class ExchangeTestUtil {
     if (authMethod === AuthMethod.FORCE) {
       const withdrawalFee = await this.loopringV3.forcedWithdrawalFee();
       if (owner != Constants.zeroAddress) {
-        const numAvailableSlotsBefore = (
-          await this.exchange.getNumAvailableForcedSlots()
-        ).toNumber();
+        const numAvailableSlotsBefore = (await this.exchange.getNumAvailableForcedSlots()).toNumber();
         await this.exchange.forceWithdraw(signer, token, accountID, {
           from: signer,
           value: withdrawalFee
         });
-        const numAvailableSlotsAfter = (
-          await this.exchange.getNumAvailableForcedSlots()
-        ).toNumber();
+        const numAvailableSlotsAfter = (await this.exchange.getNumAvailableForcedSlots()).toNumber();
         assert.equal(
           numAvailableSlotsAfter,
           numAvailableSlotsBefore - 1,
@@ -1796,6 +1808,7 @@ export class ExchangeTestUtil {
 
     // Prepare block data
     const onchainBlocks: OnchainBlock[] = [];
+    const printBlocks: PrintBlock[] = [];
     for (const [i, block] of blocks.entries()) {
       //console.log(block.blockIdx);
       const onchainBlock: OnchainBlock = {
@@ -1808,22 +1821,57 @@ export class ExchangeTestUtil {
         offchainData: web3.utils.hexToBytes(block.offchainData),
         auxiliaryData: block.auxiliaryData
       };
+      console.log("block i = " + i);
+      console.log("blockType: " + onchainBlock.blockType);
+      console.log("blockSize: " + onchainBlock.blockSize);
+      console.log("blockVersion: " + onchainBlock.blockVersion);
+      console.log("data: " + block.data);
+      console.log("proof: " + onchainBlock.proof);
+      console.log(
+        "storeBlockInfoOnchain: " + onchainBlock.storeBlockInfoOnchain
+      );
+      console.log("offchainData: " + block.offchainData);
+      for (const [j, auxiliaryData] of onchainBlock.auxiliaryData.entries()) {
+        console.log("auxiliaryData j = " + j);
+        // console.log("auxiliaryData = " + auxiliaryData);
+      }
       onchainBlocks.push(onchainBlock);
+      const printBlock: PrintBlock = {
+        blockType: onchainBlock.blockType,
+        blockSize: onchainBlock.blockSize,
+        blockVersion: onchainBlock.blockVersion,
+        data: block.data,
+        proof: onchainBlock.proof,
+        storeBlockInfoOnchain: onchainBlock.storeBlockInfoOnchain,
+        offchainData: block.offchainData
+      };
+      printBlocks.push(printBlock);
     }
+
+    const cdata = this.exchange.contract.methods
+      .submitBlocks(onchainBlocks)
+      .encodeABI();
+    console.log("cdata = " + cdata);
+    const commitData: CommitData = {
+      blocks: printBlocks,
+      txData: cdata
+    };
+    const basicFileName = "./blocks/block_" + this.exchangeId + "_basic.json";
+    fs.writeFileSync(
+      basicFileName,
+      JSON.stringify(commitData, undefined, 4),
+      "utf8"
+    );
 
     // Callback that allows modifying the blocks
     if (testCallback !== undefined) {
       testCallback(onchainBlocks, blocks);
     }
 
-    const numBlocksSubmittedBefore = (
-      await this.exchange.getBlockHeight()
-    ).toNumber();
+    const numBlocksSubmittedBefore = (await this.exchange.getBlockHeight()).toNumber();
 
     // Forced requests
-    const numAvailableSlotsBefore = (
-      await this.exchange.getNumAvailableForcedSlots()
-    ).toNumber();
+    const numAvailableSlotsBefore = (await this.exchange.getNumAvailableForcedSlots()).toNumber();
 
     // Submit the blocks onchain
     const operatorContract = this.operator ? this.operator : this.exchange;
@@ -1929,9 +1977,7 @@ export class ExchangeTestUtil {
     const ethBlock = await web3.eth.getBlock(tx.receipt.blockNumber);
 
     // Check number of blocks submitted
-    const numBlocksSubmittedAfter = (
-      await this.exchange.getBlockHeight()
-    ).toNumber();
+    const numBlocksSubmittedAfter = (await this.exchange.getBlockHeight()).toNumber();
     assert.equal(
       numBlocksSubmittedAfter,
       numBlocksSubmittedBefore + blocks.length,
@@ -1995,9 +2041,7 @@ export class ExchangeTestUtil {
     }
 
     // Forced requests
-    const numAvailableSlotsAfter = (
-      await this.exchange.getNumAvailableForcedSlots()
-    ).toNumber();
+    const numAvailableSlotsAfter = (await this.exchange.getNumAvailableForcedSlots()).toNumber();
     let numForcedRequestsProcessed = 0;
     for (const block of blocks) {
       for (const tx of block.internalBlock.transactions) {
@@ -2132,6 +2176,7 @@ export class ExchangeTestUtil {
 
       // Create the auxiliary data
       const auxiliaryData: any[] = [];
+      const auxiliaryHexData: any[] = [];
       let numConditionalTransactions = 0;
       for (const [i, transaction] of transactions.entries()) {
         if (transaction.txType === "Transfer") {
@@ -2139,14 +2184,26 @@ export class ExchangeTestUtil {
             numConditionalTransactions++;
             const encodedTransferData = this.getTransferAuxData(transaction);
             auxiliaryData.push([i, web3.utils.hexToBytes(encodedTransferData)]);
+            console.log("txIndex = " + i);
+            console.log(
+              "Transfer encodedTransferData = " + encodedTransferData
+            );
+            auxiliaryHexData.push([i, encodedTransferData]);
           }
         } else if (transaction.txType === "Withdraw") {
           numConditionalTransactions++;
           const encodedWithdrawalData = this.getWithdrawalAuxData(transaction);
           auxiliaryData.push([i, web3.utils.hexToBytes(encodedWithdrawalData)]);
+          console.log("txIndex = " + i);
+          console.log(
+            "Withdraw encodedWithdrawalData = " + encodedWithdrawalData
+          );
+          auxiliaryHexData.push([i, encodedWithdrawalData]);
         } else if (transaction.txType === "Deposit") {
           numConditionalTransactions++;
           auxiliaryData.push([i, web3.utils.hexToBytes("0x")]);
+          console.log("deposit txIndex = " + i);
+          auxiliaryHexData.push([i, ""]);
         } else if (transaction.txType === "AccountUpdate") {
           if (transaction.type > 0) {
             numConditionalTransactions++;
@@ -2157,17 +2214,39 @@ export class ExchangeTestUtil {
               i,
               web3.utils.hexToBytes(encodedAccountUpdateData)
             ]);
+            console.log("txIndex = " + i);
+            console.log(
+              "AccountUpdate encodedAccountUpdateData = " +
+                encodedAccountUpdateData
+            );
+            auxiliaryHexData.push([i, encodedAccountUpdateData]);
           }
         } else if (transaction.txType === "AmmUpdate") {
           numConditionalTransactions++;
           const encodedAmmUpdateData = this.getAmmUpdateAuxData(transaction);
           auxiliaryData.push([i, web3.utils.hexToBytes(encodedAmmUpdateData)]);
+          console.log("txIndex = " + i);
+          console.log(
+            "AccountUpdate encodedAmmUpdateData = " + encodedAmmUpdateData
+          );
+          auxiliaryHexData.push([i, encodedAmmUpdateData]);
         }
       }
       logDebug("numConditionalTransactions: " + numConditionalTransactions);
 
       const currentBlockIdx = this.blocks[exchangeID].length - 1;
-
+      const auxiliaryDataFileNameId = currentBlockIdx + 1;
+      const auxiliaryDataFileName =
+        "./blocks/block_" +
+        exchangeID +
+        "_" +
+        auxiliaryDataFileNameId +
+        "_auxiliaryData.json";
+      fs.writeFileSync(
+        auxiliaryDataFileName,
+        JSON.stringify(auxiliaryHexData, undefined, 4),
+        "utf8"
+      );
       const protocolFees = await this.exchange.getProtocolFeeValues();
       const protocolTakerFeeBips = protocolFees.takerFeeBips.toNumber();
       const protocolMakerFeeBips = protocolFees.makerFeeBips.toNumber();
@@ -2705,14 +2784,14 @@ export class ExchangeTestUtil {
   }
 
   public async advanceBlockTimestamp(seconds: number) {
-    const previousTimestamp = (
-      await web3.eth.getBlock(await web3.eth.getBlockNumber())
-    ).timestamp;
+    const previousTimestamp = (await web3.eth.getBlock(
+      await web3.eth.getBlockNumber()
+    )).timestamp;
     await this.evmIncreaseTime(seconds);
     await this.evmMine();
-    const currentTimestamp = (
-      await web3.eth.getBlock(await web3.eth.getBlockNumber())
-    ).timestamp;
+    const currentTimestamp = (await web3.eth.getBlock(
+      await web3.eth.getBlockNumber()
+    )).timestamp;
     assert(
       Math.abs(currentTimestamp - (previousTimestamp + seconds)) < 60,
       "Timestamp should have been increased by roughly the expected value"
@@ -3280,27 +3359,19 @@ export class ExchangeTestUtil {
     const tokenAddrDecimalsMap = new Map<string, number>();
     const tokenAddrInstanceMap = new Map<string, any>();
 
-    const [
-      eth,
-      weth,
-      lrc,
-      gto,
-      rdn,
-      rep,
-      inda,
-      indb,
-      test
-    ] = await Promise.all([
-      null,
-      this.contracts.WETHToken.deployed(),
-      this.contracts.LRCToken.deployed(),
-      this.contracts.GTOToken.deployed(),
-      this.contracts.RDNToken.deployed(),
-      this.contracts.REPToken.deployed(),
-      this.contracts.INDAToken.deployed(),
-      this.contracts.INDBToken.deployed(),
-      this.contracts.TESTToken.deployed()
-    ]);
+    const [eth, weth, lrc, gto, rdn, rep, inda, indb, test] = await Promise.all(
+      [
+        null,
+        this.contracts.WETHToken.deployed(),
+        this.contracts.LRCToken.deployed(),
+        this.contracts.GTOToken.deployed(),
+        this.contracts.RDNToken.deployed(),
+        this.contracts.REPToken.deployed(),
+        this.contracts.INDAToken.deployed(),
+        this.contracts.INDBToken.deployed(),
+        this.contracts.TESTToken.deployed()
+      ]
+    );
 
     const allTokens = [eth, weth, lrc, gto, rdn, rep, inda, indb, test];
 
