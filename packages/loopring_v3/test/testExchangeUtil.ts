@@ -1834,6 +1834,7 @@ export class ExchangeTestUtil {
       console.log("blockVersion: " + onchainBlock.blockVersion);
       console.log("data: " + block.data);
       console.log("proof: " + onchainBlock.proof);
+
       console.log(
         "storeBlockInfoOnchain: " + onchainBlock.storeBlockInfoOnchain
       );
