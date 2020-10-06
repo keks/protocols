@@ -1809,6 +1809,7 @@ export class ExchangeTestUtil {
     // Prepare block data
     const onchainBlocks: OnchainBlock[] = [];
     const printBlocks: PrintBlock[] = [];
+    let blockIdx = 0;
     for (const [i, block] of blocks.entries()) {
       //console.log(block.blockIdx);
       const onchainBlock: OnchainBlock = {
@@ -1845,6 +1846,7 @@ export class ExchangeTestUtil {
         storeBlockInfoOnchain: onchainBlock.storeBlockInfoOnchain,
         offchainData: block.offchainData
       };
+      blockIdx = block.blockIdx;
       printBlocks.push(printBlock);
     }
 
@@ -1856,7 +1858,8 @@ export class ExchangeTestUtil {
       blocks: printBlocks,
       txData: cdata
     };
-    const basicFileName = "./blocks/block_" + this.exchangeId + "_basic.json";
+    const basicFileName =
+      "./blocks/block_" + this.exchangeId + "_" + blockIdx + "_basic.json";
     fs.writeFileSync(
       basicFileName,
       JSON.stringify(commitData, undefined, 4),
