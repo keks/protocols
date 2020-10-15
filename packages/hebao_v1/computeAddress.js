@@ -84,8 +84,8 @@ function calAddress(batch, salt) {
   const score =
     (headScore * headScore +
       tailScore * tailScore +
-      concatScore * concatScore) /
-    30000;
+      (concatScore * concatScore) / 2) /
+    25000;
   const result = {
     addr,
     batch,
@@ -108,10 +108,10 @@ function findTopAddressesInBatch(nextBatch) {
   for (let i = 0; i < batchSize; i++) {
     const addr = calAddress(nextBatch, i + base);
 
-    if (addr.score >= 0.48) {
+    if (addr.score >= 0.45) {
       console.log(addr);
       prettyOnes.push(addr);
-    } else if (addr.score <= 0.0037) {
+    } else if (addr.score <= 0.00412) {
       // console.log("\t", addr);
       uglyOnes.push(addr);
     }
