@@ -43,34 +43,19 @@ function computeAddress(owner, salt) {
 }
 
 function scoreString(str) {
-  var uniql = "";
-  var p = 0;
-  for (var x = 0; x < str.length; x++) {
-    if (uniql.indexOf(str.charAt(x)) == -1) {
-      uniql += str[x];
-      if (str[x] >= "A" && str[x] <= "z") {
-        p += 1;
-      } else if (str[x] == "4") {
-        p += 0.4;
-      } else if (
-        str[x] == "1" ||
-        str[x] == "2" ||
-        str[x] == "3" ||
-        str[x] == "5" ||
-        str[x] == "7"
-      ) {
-        p += 0.3;
-      } else if (str[x] == "9") {
-        p += 0.2;
-      } else if (str[x] == "6" || str[x] == "8") {
-        p += 0.1;
-      }
-    }
+  let map = new Map();
+  let s = str.length;
+  for (var i = 0; i < s; i++) {
+    let c = str[i];
+    let v = map.has(c) ? map.get(c) : 0;
+    map.set(c, v + 1);
   }
-  var score = 10 + (90.0 * (str.length - uniql.length)) / (str.length - 1);
-  score *= (20 - p) / 20;
 
-  return score;
+  let score = 0.0;
+  for (let v of map.values()) {
+    score += 3 ** v;
+  }
+  return (score - 3 * s) / (3 ** s - 3 * s);
 }
 
 function calAddress(batch, salt) {
@@ -81,11 +66,7 @@ function calAddress(batch, salt) {
     addr.slice(2, 2 + endingSize) + addr.slice(0 - endingSize)
   );
 
-  const score =
-    (headScore * headScore +
-      tailScore * tailScore +
-      (concatScore * concatScore) / 2) /
-    25000;
+  const score = (headScore + tailScore + concatScore) / 3;
   const result = {
     addr,
     batch,
@@ -108,10 +89,11 @@ function findTopAddressesInBatch(nextBatch) {
   for (let i = 0; i < batchSize; i++) {
     const addr = calAddress(nextBatch, i + base);
 
-    if (addr.score >= 0.45) {
-      console.log(addr);
+    if (addr.score >= 0.1) {
+      // console.log(addr);
+
       prettyOnes.push(addr);
-    } else if (addr.score <= 0.00412) {
+    } else if (addr.score == 0) {
       // console.log("\t", addr);
       uglyOnes.push(addr);
     }
