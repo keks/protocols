@@ -18,8 +18,8 @@ abstract contract GuardianModule is SecurityModule
 
     bytes32 public GUARDIAN_DOMAIN_SEPERATOR;
 
-    uint constant public MAX_GUARDIANS = 20;
-    uint public constant GUARDIAN_PENDING_PERIOD = 3 days;
+    uint constant public MAX_GUARDIANS           = 8;
+    uint public constant GUARDIAN_PENDING_PERIOD = 7 days;
 
     bytes32 public constant ADD_GUARDIAN_IMMEDIATELY_TYPEHASH = keccak256(
         "addGuardianImmediately(address wallet,uint256 validUntil,address guardian,uint256 group)"
