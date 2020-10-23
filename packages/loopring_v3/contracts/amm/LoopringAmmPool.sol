@@ -15,6 +15,7 @@ import "./libamm/AmmPoolToken.sol";
 import "./libamm/AmmStatus.sol";
 import "./libamm/AmmWithdrawal.sol";
 import "./PoolToken.sol";
+import "@nomiclabs/buidler/console.sol";
 
 
 /// @title LoopringAmmPool
@@ -130,6 +131,7 @@ contract LoopringAmmPool is
         // nonReentrant     // Not needed, does not do any external calls (except to the exchange)
                             // and can only be called by the exchange owner.
     {
+	console.log("Enter beforeBlockSubmission: txIdx:", txIdx, "data:", data, "numTxs:", numTxs);
         state.beforeBlockSubmission(_block, data, txIdx, numTxs);
     }
 

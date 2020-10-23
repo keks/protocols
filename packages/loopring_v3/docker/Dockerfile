@@ -1,4 +1,6 @@
-FROM mhart/alpine-node:10.15.3
+FROM ubuntu:18.04
+
+RUN sudo apt-get update && sudo apt-get upgrade
 
 RUN mkdir -p /usr/local/loopring3
 WORKDIR /usr/local/loopring3

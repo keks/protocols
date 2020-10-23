@@ -12,6 +12,7 @@ import "../../lib/SignatureUtil.sol";
 import "./AmmData.sol";
 import "./AmmPoolToken.sol";
 import "./IAmmSharedConfig.sol";
+import "@nomiclabs/buidler/console.sol";
 
 
 /// @title AmmStatus
@@ -38,6 +39,7 @@ library AmmStatus
         )
         internal
     {
+	console.log("amm setupPool:");
         require(
             bytes(config.poolName).length > 0 && bytes(config.tokenSymbol).length > 0,
             "INVALID_NAME_OR_SYMBOL"
@@ -58,6 +60,9 @@ library AmmStatus
         S.poolTokenID = exchange.getTokenID(address(this));
         S.feeBips = config.feeBips;
         S.domainSeparator = EIP712.hash(EIP712.Domain(config.poolName, "1.0.0", address(this)));
+
+	console.log("S.exchange:", address(S.exchange));
+	console.log("S.exchangeOwner:", S.exchangeOwner);
 
         S.poolName = config.poolName;
         S.symbol = config.tokenSymbol;
